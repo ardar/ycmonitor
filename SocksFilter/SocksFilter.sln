@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TcpIpDog", "TcpIpDog\TcpIpDog.vcproj", "{58E351D1-85E4-41FE-8A06-A138AAF9EF2A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FilterConsole", "FilterConsole\FilterConsole.vcproj", "{A5D55F7D-4458-4194-B9E5-510E80AA7BCE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{58E351D1-85E4-41FE-8A06-A138AAF9EF2A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{58E351D1-85E4-41FE-8A06-A138AAF9EF2A}.Debug|Win32.Build.0 = Debug|Win32
+		{58E351D1-85E4-41FE-8A06-A138AAF9EF2A}.Release|Win32.ActiveCfg = Release|Win32
+		{58E351D1-85E4-41FE-8A06-A138AAF9EF2A}.Release|Win32.Build.0 = Release|Win32
+		{A5D55F7D-4458-4194-B9E5-510E80AA7BCE}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A5D55F7D-4458-4194-B9E5-510E80AA7BCE}.Debug|Win32.Build.0 = Debug|Win32
+		{A5D55F7D-4458-4194-B9E5-510E80AA7BCE}.Release|Win32.ActiveCfg = Release|Win32
+		{A5D55F7D-4458-4194-B9E5-510E80AA7BCE}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		VisualSVNWorkingCopyRoot = .
+	EndGlobalSection
+EndGlobal

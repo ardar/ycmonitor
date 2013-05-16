@@ -1,0 +1,6 @@
+LIBRARY			WinsockSpi
+
+DESCRIPTION		"Implements a layered service provider for TCP"
+
+EXPORTS   
+				WSPStartup

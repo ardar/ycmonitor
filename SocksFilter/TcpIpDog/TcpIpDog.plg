@@ -1,0 +1,28 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: TcpIpDog - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\DOCUME~1\Quyin\LOCALS~1\Temp\RSPC40.tmp" with contents
+[
+/nologo /MT /W3 /GX /Od /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /D "_WINDLL" /D "_MBCS" /D "TCPIPDOG_EXPORTS" /Fo"Release/" /Fd"Release/" /FD /c 
+"F:\QP\SpiPack\TcpIpDog\Tcpipdog.cpp"
+]
+Creating command line "cl.exe @C:\DOCUME~1\Quyin\LOCALS~1\Temp\RSPC40.tmp" 
+Creating command line "link.exe ws2_32.lib /nologo /dll /incremental:yes /pdb:"Release/WinsockSpi.pdb" /machine:I386 /def:".\LspServ.def" /out:"..\release\WinsockSpi.dll" /implib:"Release/WinsockSpi.lib"  .\Release\Tcpipdog.obj "
+<h3>Output Window</h3>
+Compiling...
+Tcpipdog.cpp
+Linking...
+   Creating library Release/WinsockSpi.lib and object Release/WinsockSpi.exp
+
+
+
+<h3>Results</h3>
+WinsockSpi.dll - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>

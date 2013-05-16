@@ -1,0 +1,53 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BSUtil", "BSUtil\BSUtil.vcproj", "{EB77F45D-E59B-4487-9953-FEBAA763F953}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3Client", "D3Client\D3Client.vcproj", "{3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB77F45D-E59B-4487-9953-FEBAA763F953} = {EB77F45D-E59B-4487-9953-FEBAA763F953}
+		{D06259A2-5884-4539-8E70-9F9173ECDCF7} = {D06259A2-5884-4539-8E70-9F9173ECDCF7}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3Common", "D3Common\D3Common.vcproj", "{D06259A2-5884-4539-8E70-9F9173ECDCF7}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB77F45D-E59B-4487-9953-FEBAA763F953} = {EB77F45D-E59B-4487-9953-FEBAA763F953}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PerconClientTest", "ClientTest\ClientTest.vcproj", "{C746FBC6-8D7D-46FE-A6CC-EEA4AE1D4C88}"
+	ProjectSection(ProjectDependencies) = postProject
+		{EB77F45D-E59B-4487-9953-FEBAA763F953} = {EB77F45D-E59B-4487-9953-FEBAA763F953}
+		{D06259A2-5884-4539-8E70-9F9173ECDCF7} = {D06259A2-5884-4539-8E70-9F9173ECDCF7}
+		{3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D} = {3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EB77F45D-E59B-4487-9953-FEBAA763F953}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EB77F45D-E59B-4487-9953-FEBAA763F953}.Debug|Win32.Build.0 = Debug|Win32
+		{EB77F45D-E59B-4487-9953-FEBAA763F953}.Release|Win32.ActiveCfg = Release|Win32
+		{EB77F45D-E59B-4487-9953-FEBAA763F953}.Release|Win32.Build.0 = Release|Win32
+		{3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D}.Debug|Win32.Build.0 = Debug|Win32
+		{3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D}.Release|Win32.ActiveCfg = Release|Win32
+		{3ACA3BFF-AA74-41DF-8A8F-7DE22DED646D}.Release|Win32.Build.0 = Release|Win32
+		{D06259A2-5884-4539-8E70-9F9173ECDCF7}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D06259A2-5884-4539-8E70-9F9173ECDCF7}.Debug|Win32.Build.0 = Debug|Win32
+		{D06259A2-5884-4539-8E70-9F9173ECDCF7}.Release|Win32.ActiveCfg = Release|Win32
+		{D06259A2-5884-4539-8E70-9F9173ECDCF7}.Release|Win32.Build.0 = Release|Win32
+		{C746FBC6-8D7D-46FE-A6CC-EEA4AE1D4C88}.Debug|Win32.ActiveCfg = Debug|Win32
+		{C746FBC6-8D7D-46FE-A6CC-EEA4AE1D4C88}.Debug|Win32.Build.0 = Debug|Win32
+		{C746FBC6-8D7D-46FE-A6CC-EEA4AE1D4C88}.Release|Win32.ActiveCfg = Release|Win32
+		{C746FBC6-8D7D-46FE-A6CC-EEA4AE1D4C88}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		VisualSVNWorkingCopyRoot = .
+	EndGlobalSection
+EndGlobal
