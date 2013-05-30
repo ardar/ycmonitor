@@ -55,5 +55,4 @@
 
 #include "D3AuthCmd.h"
 #include "D3GetScheduleCmd.h"
-#include "D3ScheduleOPCmd.h"
 #include "D3TracePriceCmd.h"

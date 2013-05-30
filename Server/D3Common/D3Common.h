@@ -393,6 +393,7 @@ struct D3Schedule
 	{
 		ScheduleNone,
 		ScheduleScript,//执行脚本
+		ScheduleExec,//执行进程
 	};
 	DWORD dwScheduleId;
 	//重复类型

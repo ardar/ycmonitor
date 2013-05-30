@@ -14,23 +14,22 @@ MySQL - 5.1.62-community : Database - d3
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 /*Table structure for table `schedule` */
 
-DROP TABLE IF EXISTS `schedule`;
 
-CREATE TABLE `schedule` (
-  `ScheduleId` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `ScheduleName` varchar(50) NOT NULL,
-  `BeginTime` int(11) NOT NULL DEFAULT '0' COMMENT 'timestamp',
-  `EndTime` int(11) DEFAULT '0' COMMENT 'timestamp or times',
-  `RepeatType` int(11) NOT NULL DEFAULT '0' COMMENT '0.once,1.sec,2min,3hour,4day,5week,6month',
-  `RepeatParam` int(10) unsigned DEFAULT '0' COMMENT 'how many units',
-  `IsEnabled` tinyint(1) NOT NULL DEFAULT '0',
-  `LastExecTime` int(11) NOT NULL DEFAULT '0' COMMENT 'timestamp of last executed.',
-  `RetriedTimes` int(11) NOT NULL DEFAULT '0',
-  `LastError` int(11) DEFAULT '0' COMMENT '0:no error , >0:error code',
-  `Operation` int(11) DEFAULT NULL COMMENT 'Query',
-  `OperationParam` text,
+CREATE TABLE `yc_monitor_schedule` (
+  `ScheduleId` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `ScheduleName` VARCHAR(50) NOT NULL,
+  `BeginTime` INT(11) NOT NULL DEFAULT '0' COMMENT 'timestamp',
+  `EndTime` INT(11) DEFAULT '0' COMMENT 'timestamp or times',
+  `RepeatType` INT(11) NOT NULL DEFAULT '0' COMMENT '0.once,1.sec,2min,3hour,4day,5week,6month',
+  `RepeatParam` INT(10) UNSIGNED DEFAULT '0' COMMENT 'how many units',
+  `IsEnabled` TINYINT(1) NOT NULL DEFAULT '0',
+  `LastExecTime` INT(11) NOT NULL DEFAULT '0' COMMENT 'timestamp of last executed.',
+  `RetriedTimes` INT(11) NOT NULL DEFAULT '0',
+  `LastError` INT(11) DEFAULT '0' COMMENT '0:no error , >0:error code',
+  `Operation` INT(11) DEFAULT NULL COMMENT 'Query',
+  `OperationParam` TEXT,
   PRIMARY KEY (`ScheduleId`)
-) ENGINE=InnoDB DEFAULT CHARSET=gbk;
+) ENGINE=INNODB DEFAULT CHARSET=utf8;
 
 /*Data for the table `schedule` */
 

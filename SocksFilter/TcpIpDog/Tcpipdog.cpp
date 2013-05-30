@@ -17,7 +17,7 @@
 // 全局变量，用来保存系统服务提供者30个服务函数指针
 //
 WSPPROC_TABLE		NextProcTable   ;
-//全局变量，用来表示该进程是否是被注入的目标进程
+// 全局变量，用来表示该进程是否是被注入的目标进程
 
 DWORD dwCurrTime = time(0);
 TCHAR szProxyServer[0x100] = {0};
@@ -26,7 +26,13 @@ TCHAR szProxyUser[0x100] = {0};
 TCHAR szProxyPass[0x100] = {0};
 DWORD dwPortBegin = 0;
 DWORD dwPortEnd = 0;
+
+DWORD g_dwRefreshTime = 30;
+TCHAR g_szPushServerHost[0x100] =  {0};
+DWORD g_dwPushServerPort = 10088;
+
 BOOL bIsInit = FALSE;
+
 DWORD dwExpireTime = 1336406571;
 CCriticalSection g_csCore;
 CString g_szHookExePaths;
@@ -34,31 +40,75 @@ CString g_szHookExePaths;
 
 struct CONNSTAT{
 	DWORD dwSocket;
-	DWORD dwRemoteHost;
+	TCHAR szRemoteHost[64];
 	DWORD dwRemotePort;
 	UINT64 dwBeginTime;
 	UINT64 dwLastSaveTime;
 	UINT64 dwSentBytes;
 	UINT64 dwRecvBytes;
 };
-CMap<DWORD,DWORD,CONNSTAT,CONNSTAT> s_connMap;
+CMap<DWORD, DWORD, CString, LPCTSTR> s_socketMap;
+CMap<CString,LPCTSTR,CONNSTAT,CONNSTAT> s_connMap;
 CMutex s_connLock;
 
+void handleConnection(DWORD dwSocket, const struct sockaddr FAR * name, BOOL bIsConnect=true)
+{
+	SOCKADDR_IN* addr = (SOCKADDR_IN*)name;
+	if(dwPortBegin>0 || dwPortEnd>0)
+	{
+		if(ntohs(addr->sin_port)<dwPortBegin || ntohs(addr->sin_port)>dwPortEnd)
+		{
+			return;
+		}
+	}
+	if(bIsConnect)
+	{
+		CString szCurrAddr;
+		szCurrAddr.Format("%s:%d", inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
+		s_socketMap.SetAt(dwSocket, szCurrAddr);
 
-void handleTrafic(DWORD dwSocket, LPWSABUF buf, LPDWORD lpLen, BOOL bIsSend=true)
+		// Init conn state
+		CTime time = CTime::GetCurrentTime();
+		BSAutoLock lock(&s_connLock);
+		CONNSTAT conn;
+		if(!s_connMap.Lookup(szCurrAddr, conn))
+		{
+			ZeroMemory(&conn, sizeof(conn));
+			conn.dwSocket = dwSocket;
+			strcpy_s(conn.szRemoteHost, sizeof(conn.szRemoteHost), szCurrAddr.GetBuffer());
+			conn.dwRemotePort = ntohs(addr->sin_port);
+			conn.dwBeginTime = time.GetTime();
+		}
+		conn.dwLastSaveTime = time.GetTime();
+		s_connMap.SetAt(szCurrAddr, conn);
+
+		CString sz;
+		sz.Format("connect:%d %s", dwSocket, szCurrAddr);
+		OutputDebugString(sz);
+	}
+	else
+	{
+		s_socketMap.RemoveKey(dwSocket);
+	}	
+}
+
+void handleTrafic(DWORD dwSocket, 
+				  LPWSABUF buf, LPDWORD lpLen, BOOL bIsSend=true)
 {
 	int len = (int)lpLen;
 	BSAutoLock lock(&s_connLock);
+	CString szAddr;
 	CONNSTAT conn;
-	if(!s_connMap.Lookup(dwSocket, conn))
+	if(!s_socketMap.Lookup(dwSocket, szAddr))
 	{
-		ZeroMemory(&conn, sizeof(conn));
-		conn.dwSocket = dwSocket;
-		conn.dwRemoteHost = 1;
-		conn.dwRemotePort = 0;
-		CTime time = CTime::GetCurrentTime();
-		conn.dwBeginTime = time.GetTime();
+		return;
 	}
+	if(!s_connMap.Lookup(szAddr, conn))
+	{
+		return;
+	}
+	
+	CTime time = CTime::GetCurrentTime();
 	if(bIsSend)
 	{
 		conn.dwSentBytes += len;
@@ -67,11 +117,18 @@ void handleTrafic(DWORD dwSocket, LPWSABUF buf, LPDWORD lpLen, BOOL bIsSend=true
 	{
 		conn.dwRecvBytes += len;
 	}
-	s_connMap.SetAt(dwSocket, conn);
+	conn.dwLastSaveTime = time.GetTime();
+	if(conn.dwLastSaveTime - conn.dwBeginTime >= g_dwRefreshTime)
+	{
+		conn.dwSentBytes = 0;
+		conn.dwRecvBytes = 0;
+		conn.dwBeginTime = time.GetTime();
+	}
+	s_connMap.SetAt(szAddr, conn);
 
 	CString sz;
-	sz.Format("trafic:%d thistime:(%d)(%d), sent(%I64d), recv(%I64d) ", 
-		dwSocket, len, bIsSend, conn.dwSentBytes, conn.dwRecvBytes, bIsSend);
+	sz.Format("trafic:%d %s len(%d)(%d), sent(%I64d), recv(%I64d) ", 
+		dwSocket, szAddr, len, bIsSend, conn.dwSentBytes, conn.dwRecvBytes, bIsSend);
 	OutputDebugString(sz);
 }
 
@@ -100,8 +157,9 @@ BOOL IsHookProcess()
 	{
 		TCHAR szCurrExePath[MAX_PATH] = {0};
 		GetModuleFileName(NULL, szCurrExePath, MAX_PATH-1);
-		//OutputDebugString("value now:");
-		//OutputDebugString(szCurrExePath);
+
+		OutputDebugString("process now:");
+		OutputDebugString(szCurrExePath);
 
 		strupr(szCurrExePath);
 
@@ -139,8 +197,8 @@ BOOL GetHookProvider(
 }
 int WSPAPI WSPCloseSocket(SOCKET s, LPINT lpErrno )
 {
-	OutputDebugStringA("WSPCloseSocket");
-	//if (IsHookProcess())
+	//OutputDebugStringA("WSPCloseSocket");
+	if (IsHookProcess())
 	{
 		APICloseSocket(s);
 	}
@@ -156,8 +214,6 @@ int WSPAPI WSPConnect(
 	LPQOS lpGQOS, 
 	LPINT lpErrno )
 {
-	OutputDebugStringA("WSPconnect");
-	handleTrafic(s, NULL, 0, true);
 	if (IsHookProcess() || dwPortBegin>0 || dwPortEnd>0)
 	{
 		return APIConnect(s,  name,  namelen,  lpCallerData,  lpCalleeData,  lpSQOS,  lpGQOS,  lpErrno);
@@ -179,14 +235,12 @@ int WSPAPI WSPSend(
 	LPINT			lpErrno
 )
 {	
-	OutputDebugString("WSPSend");
-
-	handleTrafic(s, lpBuffers, lpNumberOfBytesSent, true);
 
 	int nret =NextProcTable.lpWSPSend(
 		s,lpBuffers,dwBufferCount,lpNumberOfBytesSent,dwFlags,lpOverlapped,lpCompletionRoutine,lpThreadId,lpErrno);
-	/*if (nret==SOCKET_ERROR)return nret;
-	if (GetHookProcess())
+	if (nret==SOCKET_ERROR)return nret;
+	handleTrafic(s, lpBuffers, lpNumberOfBytesSent, true);
+	/*if (IsHookProcess())
 	{				
 		for (int i=0;i<(int)dwBufferCount;i++)
 		{
@@ -207,11 +261,11 @@ int WSPAPI WSPRecv(
 	LPWSATHREADID lpThreadId, 
 	LPINT lpErrno)
 {
-	handleTrafic(s, lpBuffers, lpNumberOfBytesRecvd, false);
 	//OutputDebugString("WSPRecv");
 	int nret=NextProcTable.lpWSPRecv(s,lpBuffers,dwBufferCount,lpNumberOfBytesRecvd,lpFlags,lpOverlapped,lpCompletionRoutine,lpThreadId,lpErrno);
-	/*if (!GetHookProcess()||nret==SOCKET_ERROR||(*lpNumberOfBytesRecvd)<=0)return nret;
-	APIRecv(s,(BYTE *)(lpBuffers->buf),*lpNumberOfBytesRecvd);*/
+	if (nret==SOCKET_ERROR||(*lpNumberOfBytesRecvd)<=0)return nret;
+	handleTrafic(s, lpBuffers, lpNumberOfBytesRecvd, false);
+	/*APIRecv(s,(BYTE *)(lpBuffers->buf),*lpNumberOfBytesRecvd);*/
 	return nret;
 }
 SOCKET WSPAPI WSPSocket(
@@ -224,10 +278,10 @@ SOCKET WSPAPI WSPSocket(
 	LPINT		lpErrno
 )
 {
-	OutputDebugString("WSPSocket");
+	//OutputDebugString("WSPSocket");
 	SOCKET s= NextProcTable.lpWSPSocket(
 		af, type, protocol, lpProtocolInfo, g, dwFlags, lpErrno);
-	//APICreateSocket(s,protocol);
+	APICreateSocket(s,protocol);
 	return s;
 }
 
@@ -247,10 +301,10 @@ struct sockaddr FAR * lpFrom,
 	LPINT lpErrno
 	)
 {
-	handleTrafic(s, lpBuffers, lpNumberOfBytesRecvd, false);
-	OutputDebugString("WSPRecvFrom");
+	//OutputDebugString("WSPRecvFrom");
 	int nret=NextProcTable.lpWSPRecvFrom(s,lpBuffers,dwBufferCount,lpNumberOfBytesRecvd,lpFlags,lpFrom,lpFromlen,lpOverlapped,lpCompletionRoutine,lpThreadId,lpErrno);
-	//if (!IsHookProcess()||nret==SOCKET_ERROR||(*lpNumberOfBytesRecvd)<=0)return nret;
+	if (nret==SOCKET_ERROR||(*lpNumberOfBytesRecvd)<=0)return nret;
+	handleTrafic(s, lpBuffers, lpNumberOfBytesRecvd, false);
 	//APIRecv(s,(BYTE *)(lpBuffers->buf),*lpNumberOfBytesRecvd);	
 	return nret;
 }
@@ -270,8 +324,7 @@ int WSPAPI WSPSendTo
 					LPINT lpErrno
 					)
 {
-	handleTrafic(s, lpBuffers, lpNumberOfBytesSent, true);
-	OutputDebugString("WSPSendTo");
+	//OutputDebugString("WSPSendTo");
  
 	int nret= NextProcTable.lpWSPSendTo(		
 		 s,
@@ -286,7 +339,8 @@ int WSPAPI WSPSendTo
 		 lpThreadId,
 		 lpErrno
 		);
-	//if (nret==SOCKET_ERROR)return nret;
+	if (nret==SOCKET_ERROR)return nret;
+	handleTrafic(s, lpBuffers, lpNumberOfBytesSent, true);
 	//if (GetHookProcess())
 	//{				
 	//	//APIConnect(s,lpTo);
@@ -421,7 +475,9 @@ struct PIPEPACKHEAD
 	UINT nParamLen;
 };
 SOCKET m_LastConnectSocket;
-CMap<DWORD ,DWORD,ConnectAddr,ConnectAddr> m_ConnectAddrMap;
+
+//CMap<DWORD ,DWORD,ConnectAddr,ConnectAddr> m_ConnectAddrMap;
+
 int WINAPI APIConnect(
 					   SOCKET s, 
 					   const struct sockaddr FAR * name, 
@@ -432,15 +488,19 @@ int WINAPI APIConnect(
 					   LPQOS lpGQOS, 
 					   LPINT lpErrno )//修改值
 {
-	struct sockaddr_in sin;
-	sin=*(const struct sockaddr_in *)name;
+	struct sockaddr_in sin = *(const struct sockaddr_in *)name;
 	DWORD port = ntohs(sin.sin_port);
 	PutDbgStr("WSPConnect %s", inet_ntoa(sin.sin_addr));
+
+	//OutputDebugStringA("WSPconnect");
+	handleConnection(s, name, true);
+
 	if(strcmp(inet_ntoa(sin.sin_addr), "127.0.0.1") == 0
 		|| (dwPortBegin>=0 && dwPortEnd>0 && (port<dwPortBegin || port>dwPortEnd) ) )
 	{
 		return NextProcTable.lpWSPConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS, lpErrno); 
 	}
+
 	return NextProcTable.lpWSPConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS, lpErrno); 
 	//return connectSocks5(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS, lpErrno);
 }
@@ -450,12 +510,13 @@ void WINAPI APICreateSocket(SOCKET s, int protocol)//添加到map
 	ConnectAddr cAddr;
 	ZeroObject(cAddr);
 	cAddr.nProtocol=protocol;
-	m_ConnectAddrMap.SetAt(s,cAddr);
+	//m_ConnectAddrMap.SetAt(s,cAddr);
 	
 	
 }
 void WINAPI APICloseSocket(SOCKET s)
 {
+	handleConnection(s, NULL, false);
 	
 }
 void WINAPI APISend(SOCKET s,BYTE *buf,int len,BOOL bSendTo)//由api层面发送
@@ -867,6 +928,12 @@ void InitMe()
 	dwPortEnd = GetPrivateProfileInt("filter", "port_end", 0, currPath);
 	sz.Format("filter port:%d-%d path:%s", dwPortBegin, dwPortEnd, g_szHookExePaths);
 	OutputDebugString(sz);
+
+	g_dwRefreshTime = GetPrivateProfileInt("updater", "refresh_time", 60, currPath);
+	GetPrivateProfileString("updater", "push_server", "127.0.0.1", g_szPushServerHost, sizeof(g_szPushServerHost), currPath);
+	g_dwPushServerPort = GetPrivateProfileInt("updater", "push_port", 10080, currPath);
+
+
 	bIsInit = TRUE;
  	/*if (m_pComPipeThread==NULL && Hook())
 	{

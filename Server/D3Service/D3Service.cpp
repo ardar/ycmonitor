@@ -218,21 +218,7 @@ void D3Service::LoadConfig(LPCTSTR szConfigFilename)
 	// game proxy
 	TCHAR szTemp2[MAX_PATH];
 	ZeroMemory(szTemp2, sizeof(szTemp2));
-	GetPrivateProfileString("game_proxy", "gamepath", 
-		"D:\\Games\\Diablo III\\Diablo III.exe", szTemp2, MAX_PATH, szConfigFilename);
-	m_setting.szGamePath = szTemp2;
-	ZeroMemory(szTemp2, sizeof(szTemp2));
-	GetPrivateProfileString("game_proxy", "dllpath", 
-		"E:\\Projects\\D3ah\\D3Dll\\Debug\\D3Dll.dll", szTemp2, MAX_PATH, szConfigFilename);
-	m_setting.szInjectDllPath = szTemp2;
-	ZeroMemory(szTemp2, sizeof(szTemp2));
-	GetPrivateProfileString("game_proxy", "account", 
-		"", szTemp2, MAX_PATH, szConfigFilename);
-	m_setting.szGameAccount = szTemp2;
-	ZeroMemory(szTemp2, sizeof(szTemp2));
-	GetPrivateProfileString("game_proxy", "password", 
-		"", szTemp2, MAX_PATH, szConfigFilename);
-	m_setting.szGamePassword = szTemp2;
+	
 
 	Log("读取服务器[%s]设置, 监听地址:%s", m_szServiceId, m_setting.szListenUri);
 
@@ -497,7 +483,7 @@ void D3Service::scheduleProcess()
 						int nHour = timeNow.GetHour();
 						int nMin = timeNow.GetMinute();
 						CTime dateNow(nYear, nMonth, nDay, nHour, nMin, 0);
-						DWORD dwToRunTime = dateNow.GetTime() + pSchedule->dwRepeatParam%60;
+						DWORD dwToRunTime = dateNow.GetTime() + pSchedule->dwRepeatParam;
 						if (dwToRunTime >= timeNow.GetTime()
 							&& dwToRunTime>pSchedule->dwLastExecTime)
 						{
@@ -514,7 +500,7 @@ void D3Service::scheduleProcess()
 						int nDay = timeNow.GetDay();
 						int nHour = timeNow.GetHour();
 						CTime dateNow(nYear, nMonth, nDay, nHour, 0, 0);
-						DWORD dwToRunTime = dateNow.GetTime() + pSchedule->dwRepeatParam%3600;
+						DWORD dwToRunTime = dateNow.GetTime() + pSchedule->dwRepeatParam;
 						if (dwToRunTime >= timeNow.GetTime()
 							&& dwToRunTime>pSchedule->dwLastExecTime)
 						{
@@ -530,7 +516,7 @@ void D3Service::scheduleProcess()
 						int nYear = timeNow.GetYear();
 						int nDay = timeNow.GetDay();
 						CTime dateNow(nYear, nMonth, nDay, 0, 0, 0);
-						DWORD dwToRunTime = dateNow.GetTime() + pSchedule->dwRepeatParam%86400;
+						DWORD dwToRunTime = dateNow.GetTime() + pSchedule->dwRepeatParam;
 						if (dwToRunTime >= timeNow.GetTime()
 							&& dwToRunTime>pSchedule->dwLastExecTime)
 						{
@@ -676,6 +662,15 @@ void D3Service::executeSchedule(D3Schedule* pSchedule)
 			{
 				Log("执行计划任务脚本:%s", pSchedule->szOperationParam.c_str());
 				m_pBSLua->DoString(pSchedule->szOperationParam.c_str());
+				pSchedule->dwLastError = 0;
+				pSchedule->dwLastExecTime = time(0);
+				DataManager::Instance().SaveSchedule(*pSchedule);
+			}
+			break;
+		case D3Schedule::D3OpType::ScheduleExec:
+			{
+				Log("执行计划任务命令:%s", pSchedule->szOperationParam.c_str());
+				
 				pSchedule->dwLastError = 0;
 				pSchedule->dwLastExecTime = time(0);
 				DataManager::Instance().SaveSchedule(*pSchedule);

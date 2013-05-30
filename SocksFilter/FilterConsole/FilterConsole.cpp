@@ -78,7 +78,7 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 		strProcessPaths.Replace(_T("\r\n"), _T("\n"));
 		strProcessPaths.Replace(_T("\n\n"), _T("\n"));
 		strProcessPaths.Replace(_T("\n"), _T("|"));
-		WritePrivateProfileString(_T("filter"), _T("paths"), strProcessPaths, _T(".\\filter.ini"));
+		//WritePrivateProfileString(_T("filter"), _T("paths"), strProcessPaths, _T(".\\filter.ini"));
 
 		int nRet = m_Install.InstallProvider(sProvider, strProcessPaths.Trim().GetBuffer());
 		
