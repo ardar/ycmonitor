@@ -6,6 +6,9 @@
 #include <afxtempl.h>
 #include "DecodeLib.h"
 #include "BSAutoLock.h"
+
+#include "winsock.h" 
+#include "mysql.h" 
 //
 // 用来保存系统服务提供者路径信息的自定义注册表键值
 //
@@ -31,6 +34,12 @@ DWORD g_dwRefreshTime = 30;
 TCHAR g_szPushServerHost[0x100] =  {0};
 DWORD g_dwPushServerPort = 10088;
 
+TCHAR g_szDbServer[0x100] = {0};
+TCHAR g_szDbUser[0x100] = {0};
+TCHAR g_szDbPass[0x100] = {0};
+TCHAR g_szDbName[0x100] = {0};
+DWORD g_dwDbPort = 0;
+
 BOOL bIsInit = FALSE;
 
 DWORD dwExpireTime = 1336406571;
@@ -41,6 +50,7 @@ CString g_szHookExePaths;
 struct CONNSTAT{
 	DWORD dwSocket;
 	TCHAR szRemoteHost[64];
+	DWORD dwRemoteHost;
 	DWORD dwRemotePort;
 	UINT64 dwBeginTime;
 	UINT64 dwLastSaveTime;
@@ -50,6 +60,118 @@ struct CONNSTAT{
 CMap<DWORD, DWORD, CString, LPCTSTR> s_socketMap;
 CMap<CString,LPCTSTR,CONNSTAT,CONNSTAT> s_connMap;
 CMutex s_connLock;
+MYSQL* g_pMysql = NULL;
+HANDLE g_hMonitorThread = NULL;
+BOOL g_bRunning = false;
+
+// 输出函数
+int PutDbgStr(LPCTSTR lpFmt, ...)
+{
+	TCHAR  Msg[1024];
+	int  len=vsprintf(Msg,lpFmt,va_list(1+&lpFmt));
+	OutputDebugString(Msg);
+	return len;
+}
+
+void* GetMysql()
+{
+	if(!g_pMysql)
+	{
+		g_pMysql = new MYSQL;
+		mysql_init(g_pMysql);
+
+		mysql_options(g_pMysql, MYSQL_SET_CHARSET_NAME, "utf8");//utf8
+
+		my_bool my_true= TRUE;
+		mysql_options(g_pMysql, MYSQL_OPT_RECONNECT, &my_true);
+
+		if(!mysql_real_connect(g_pMysql, g_szDbServer, g_szDbUser, g_szDbPass, g_szDbName, g_dwDbPort,NULL,0))
+		{
+			PutDbgStr(_T("数据库连接失败!"));
+			return NULL;
+		}
+		mysql_query(g_pMysql, "SET NAMES 'UTF8'");
+	}
+	else
+	{
+		if(mysql_ping(g_pMysql)!=0)
+		{
+			PutDbgStr("Mysql Ping %s", mysql_error(g_pMysql));
+		}
+	}
+	return g_pMysql;
+}
+DWORD __stdcall MonitorThread( PVOID pParam )
+{
+	// Init the msg queue
+	MSG msg;
+	PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
+
+	CTime lastTime = CTime::GetCurrentTime();
+
+	while (g_bRunning)
+	{
+		try
+		{
+			if(g_bRunning)
+			{
+				CTime time = CTime::GetCurrentTime();
+				CArray<CONNSTAT, CONNSTAT> stList;
+				if(time.GetTime()-lastTime.GetTime()>=g_dwRefreshTime)
+				{
+					CONNSTAT conn;
+					BSAutoLock lock(&s_connLock);
+					CString szAddr;
+					POSITION pos = s_connMap.GetStartPosition();
+					while (pos)
+					{
+						s_connMap.GetNextAssoc(pos, szAddr, conn);
+
+						if(conn.dwRecvBytes>0 || conn.dwSentBytes>0)
+						{
+							stList.Add(conn);
+							conn.dwSentBytes = 0;
+							conn.dwRecvBytes = 0;
+							conn.dwLastSaveTime = conn.dwBeginTime = time.GetTime();
+							s_connMap.SetAt(szAddr, conn);
+						}
+					}
+				}
+				if(stList.GetCount()>0)
+				{
+					MYSQL* pMysql = (MYSQL*)GetMysql();
+					if(pMysql)
+					{
+						for (int i=0;i<stList.GetCount();i++)
+						{
+							const CONNSTAT conn = stList.GetAt(i);
+
+							// Query Mysql
+							CString szSql;
+							szSql.Format("insert into %s%s set clientip='%d',clientport='%d',recvbytes='%I64d',sentbytes='%I64d',recordtime='%I64d'", 
+								"yc_", "network_stat", conn.dwRemoteHost, conn.dwRemotePort, conn.dwRecvBytes, conn.dwSentBytes, conn.dwLastSaveTime);
+							int ret = mysql_query(pMysql, szSql);
+							if (ret!=0 && mysql_error(pMysql))
+							{
+								PutDbgStr("MysqlError %s, query %s", mysql_error(pMysql), szSql.GetBuffer());
+							}
+							else
+							{
+								PutDbgStr("mysqlquery: %s", szSql.GetBuffer());
+							}
+						}
+					}
+				}
+			}
+			Sleep(1000); 
+		}
+		catch (...)
+		{
+			PutDbgStr("tcpipdog监控线程未知异常");
+		}
+	}
+	return 0;
+}
 
 void handleConnection(DWORD dwSocket, const struct sockaddr FAR * name, BOOL bIsConnect=true)
 {
@@ -64,7 +186,7 @@ void handleConnection(DWORD dwSocket, const struct sockaddr FAR * name, BOOL bIs
 	if(bIsConnect)
 	{
 		CString szCurrAddr;
-		szCurrAddr.Format("%s:%d", inet_ntoa(addr->sin_addr), ntohs(addr->sin_port));
+		szCurrAddr.Format("%s:%d", inet_ntoa(addr->sin_addr), (int)ntohs(addr->sin_port));
 		s_socketMap.SetAt(dwSocket, szCurrAddr);
 
 		// Init conn state
@@ -75,6 +197,7 @@ void handleConnection(DWORD dwSocket, const struct sockaddr FAR * name, BOOL bIs
 		{
 			ZeroMemory(&conn, sizeof(conn));
 			conn.dwSocket = dwSocket;
+			conn.dwRemoteHost = inet_addr(conn.szRemoteHost);
 			strcpy_s(conn.szRemoteHost, sizeof(conn.szRemoteHost), szCurrAddr.GetBuffer());
 			conn.dwRemotePort = ntohs(addr->sin_port);
 			conn.dwBeginTime = time.GetTime();
@@ -89,7 +212,11 @@ void handleConnection(DWORD dwSocket, const struct sockaddr FAR * name, BOOL bIs
 	else
 	{
 		s_socketMap.RemoveKey(dwSocket);
-	}	
+
+		CString sz;
+		sz.Format("connect:%d", dwSocket);
+		OutputDebugString(sz);
+	}
 }
 
 void handleTrafic(DWORD dwSocket, 
@@ -118,17 +245,12 @@ void handleTrafic(DWORD dwSocket,
 		conn.dwRecvBytes += len;
 	}
 	conn.dwLastSaveTime = time.GetTime();
-	if(conn.dwLastSaveTime - conn.dwBeginTime >= g_dwRefreshTime)
-	{
-		conn.dwSentBytes = 0;
-		conn.dwRecvBytes = 0;
-		conn.dwBeginTime = time.GetTime();
-	}
+	
 	s_connMap.SetAt(szAddr, conn);
 
 	CString sz;
 	sz.Format("trafic:%d %s len(%d)(%d), sent(%I64d), recv(%I64d) ", 
-		dwSocket, szAddr, len, bIsSend, conn.dwSentBytes, conn.dwRecvBytes, bIsSend);
+		dwSocket, szAddr, len, bIsSend, conn.dwSentBytes, conn.dwRecvBytes);
 	OutputDebugString(sz);
 }
 
@@ -404,43 +526,6 @@ int WSPAPI WSPStartup(
 }
 HINSTANCE g_hModule = NULL;
 
-BOOL WINAPI DllMain(
-					HINSTANCE	hModule, 
-					DWORD		ul_reason_for_call, 
-					LPVOID		lpReserved
-					)
-{
-	switch (ul_reason_for_call)
-	{
-	case DLL_PROCESS_ATTACH:
-		{
-			printf(" process attach of dll");
-
-			BSAutoLock lock(&g_csCore);
-			g_hModule = hModule;
-			InitMe();
-
-			if(IsHookProcess())
-				OutputDebugString(_T("socksfilter.dll: DllMain...\n"));
-			//FixAdr(0x468F70,(int)myfun);
-			//FixAPI("kernel32.dll","GetCurrentThreadId",(int)myFunction);
-			//	AfxBeginThread(FixThread,0);
-
-			//StartHook();
-		}
-		break;
-	case DLL_THREAD_ATTACH:
-		printf(" thread attach of dll");
-		break;
-	case DLL_THREAD_DETACH:
-		printf(" thread detach of dll");
-		break;
-	case DLL_PROCESS_DETACH:
-		printf(" process detach of dll");
-		break;
-	}
-	return TRUE;
-}
 
 // DecodeLib.cpp : 定义 DLL 的初始化例程。
 //
@@ -495,12 +580,6 @@ int WINAPI APIConnect(
 	//OutputDebugStringA("WSPconnect");
 	handleConnection(s, name, true);
 
-	if(strcmp(inet_ntoa(sin.sin_addr), "127.0.0.1") == 0
-		|| (dwPortBegin>=0 && dwPortEnd>0 && (port<dwPortBegin || port>dwPortEnd) ) )
-	{
-		return NextProcTable.lpWSPConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS, lpErrno); 
-	}
-
 	return NextProcTable.lpWSPConnect(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS, lpErrno); 
 	//return connectSocks5(s, name, namelen, lpCallerData, lpCalleeData, lpSQOS, lpGQOS, lpErrno);
 }
@@ -533,14 +612,6 @@ void WINAPI APIInitWinSocketInterface()
 	//InitMe();
 }
 
-// 输出函数
-int PutDbgStr(LPCTSTR lpFmt, ...)
-{
-	TCHAR  Msg[1024];
-	int  len=vsprintf(Msg,lpFmt,va_list(1+&lpFmt));
-	OutputDebugString(Msg);
-	return len;
-}
 // 连接socks5代理
 int connectSocks5(SOCKET s, 
 				  const struct sockaddr FAR * name, 
@@ -892,6 +963,24 @@ void GetCurrPath(OUT TCHAR *sPath)
 	if(sPath[_tcslen(sPath) - 1] != _T('\\'))
 		_tcscat(sPath, _T("\\"));
 }  
+void CleanMe()
+{
+	g_bRunning = false;
+
+	BSAutoLock lock(&s_connLock);
+
+	if(g_pMysql)
+	{
+		mysql_close(g_pMysql);
+	}
+
+	WaitForSingleObject(g_hMonitorThread, 1000);
+
+	CloseHandle(g_hMonitorThread);
+
+
+}
+
 void InitMe()
 {
 	OutputDebugStringA("Try InitMe");
@@ -933,6 +1022,19 @@ void InitMe()
 	GetPrivateProfileString("updater", "push_server", "127.0.0.1", g_szPushServerHost, sizeof(g_szPushServerHost), currPath);
 	g_dwPushServerPort = GetPrivateProfileInt("updater", "push_port", 10080, currPath);
 
+	// Mysql
+	GetPrivateProfileString("mysql", "dbhost", "127.0.0.1", g_szDbServer, sizeof(g_szDbServer), currPath);
+	g_dwDbPort = GetPrivateProfileInt("mysql", "dbport", 3306, currPath);
+	GetPrivateProfileString("mysql", "dbuser", "", g_szDbUser, sizeof(g_szDbUser), currPath);
+	GetPrivateProfileString("mysql", "dbpass", "", g_szDbPass, sizeof(g_szDbPass), currPath);
+	GetPrivateProfileString("mysql", "dbname", "", g_szDbName, sizeof(g_szDbName), currPath);
+
+	sz.Format("mysql %s:%d u:%s p:%s db:%s", g_szDbServer, g_dwDbPort, g_szDbUser, g_szDbPass, g_szDbName);
+	OutputDebugString(sz);
+
+	g_bRunning = true;
+
+	g_hMonitorThread = CreateThread(NULL, 0, MonitorThread, (LPVOID)NULL, 0, NULL);
 
 	bIsInit = TRUE;
  	/*if (m_pComPipeThread==NULL && Hook())
@@ -940,4 +1042,45 @@ void InitMe()
 		OutputDebugStringA("Create ComPipeThread");
  		m_pComPipeThread=AfxBeginThread(CommandPipeThread,NULL);
  	}*/
+}
+
+
+BOOL WINAPI DllMain(
+					HINSTANCE	hModule, 
+					DWORD		ul_reason_for_call, 
+					LPVOID		lpReserved
+					)
+{
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
+		{
+			printf(" process attach of dll");
+
+			BSAutoLock lock(&g_csCore);
+			g_hModule = hModule;
+			InitMe();
+
+			if(IsHookProcess())
+				OutputDebugString(_T("socksfilter.dll: DllMain...\n"));
+			//FixAdr(0x468F70,(int)myfun);
+			//FixAPI("kernel32.dll","GetCurrentThreadId",(int)myFunction);
+			//	AfxBeginThread(FixThread,0);
+
+			//StartHook();
+		}
+		break;
+	case DLL_THREAD_ATTACH:
+		printf(" thread attach of dll");
+		break;
+	case DLL_THREAD_DETACH:
+		printf(" thread detach of dll");
+		break;
+	case DLL_PROCESS_DETACH:
+		printf(" process detach of dll");
+		BSAutoLock lock(&g_csCore);
+		CleanMe();
+		break;
+	}
+	return TRUE;
 }
